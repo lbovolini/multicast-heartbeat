@@ -16,7 +16,6 @@ import static com.github.lbovolini.crowd.configuration.Config.*;
 
 public abstract class Multicaster {
 
-    // !todo thread safe?
     protected Selector selector;
 
     private final int port;
@@ -24,12 +23,8 @@ public abstract class Multicaster {
     private NetworkInterface networkInterface;
 
     protected DatagramChannel channel;
-
     private final Set<String> hosts = ConcurrentHashMap.newKeySet();
-    protected InetSocketAddress allClients = new InetSocketAddress(MULTICAST_IP, MULTICAST_CLIENT_PORT);
-
     private InetSocketAddress serverAddress;
-
 
     public Multicaster(int port) {
         this.port = port;
@@ -38,7 +33,6 @@ public abstract class Multicaster {
     private void init(final DatagramChannel channel, final Selector selector) throws IOException {
         this.networkInterface = NetworkInterface.getByName(MULTICAST_INTERFACE_NAME);
         this.group = InetAddress.getByName(MULTICAST_IP);
-
         channel.setOption(StandardSocketOptions.SO_REUSEADDR, true);
         // !TODO
         channel.bind(new InetSocketAddress("0.0.0.0", this.port));
@@ -56,7 +50,7 @@ public abstract class Multicaster {
             this.channel = channel;
             this.selector = selector;
             init(channel, selector);
-            scheduler(channel);
+            scheduler();
 
             while (true) {
                 if (!selector.isOpen()) { break; }
@@ -68,10 +62,7 @@ public abstract class Multicaster {
         }
     }
 
-
-
-    // !todo thread safe?
-    protected abstract void scheduler(final DatagramChannel channel);
+    protected abstract void scheduler();
 
     private void read(SelectionKey selectionKey) throws IOException {
 
@@ -86,9 +77,8 @@ public abstract class Multicaster {
         buffer.flip();
         String message = MulticastMessageUtils.getMessage(buffer);
 
-        handle(channel, message, (InetSocketAddress)address);
+        handle(message, (InetSocketAddress)address);
     }
-
 
     private void write(SelectionKey selectionKey) throws IOException {
 
@@ -107,7 +97,6 @@ public abstract class Multicaster {
         channel.register(selectionKey.selector(), SelectionKey.OP_READ);
     }
 
-
     protected boolean isMyself(InetSocketAddress address) {
         if (address.getAddress().getHostName().equals(HOST_NAME)) {
             return (address.getPort() == MULTICAST_PORT);
@@ -116,12 +105,9 @@ public abstract class Multicaster {
     }
 
     // !todo thread safe?
-    protected void wakeUp() {
+    private void wakeUp() {
         this.selector.wakeup();
     }
-
-
-
 
     protected void join(InetSocketAddress address) {
         hosts.add(address.toString());
@@ -130,7 +116,6 @@ public abstract class Multicaster {
     protected boolean isMember(InetSocketAddress address) {
         return hosts.contains(address.toString());
     }
-
 
     private void handleSelectionKeys(final Set<SelectionKey> selectedKeys) throws IOException {
         Iterator<SelectionKey> keyIterator = selectedKeys.iterator();
@@ -149,31 +134,29 @@ public abstract class Multicaster {
         }
     }
 
-    //responseFromTo(ResponseFactory.get(DISCOVER), channel, new InetSocketAddress(MULTICAST_IP, MULTICAST_PORT));
-
     private void setServerAddress(ServerResponse serverResponse) {
         this.serverAddress = serverResponse.getServerAddress();
     }
 
     /**
-     * send message to server
+     * Envia mensagem somente para o servidor
      * @param message
      */
     public void send(String message) {
-        responseFromTo(ResponseFactory.get(message), channel, new InetSocketAddress(serverAddress.getAddress(), MULTICAST_PORT));
+        responseFromTo(ResponseFactory.get(message), new InetSocketAddress(serverAddress.getAddress(), MULTICAST_PORT));
         wakeUp();
     }
 
     /**
-     * send message to all
+     * Envia mensagem para todos participantes do grupo
      * @param message
      */
     public void sendAll(String message) {
-        responseFromTo(ResponseFactory.get(message), channel, new InetSocketAddress(MULTICAST_IP, MULTICAST_PORT));
+        responseFromTo(ResponseFactory.get(message), new InetSocketAddress(MULTICAST_IP, MULTICAST_PORT));
         wakeUp();
     }
 
-    protected void responseFromTo(String response, DatagramChannel channel, InetSocketAddress address) {
+    protected void responseFromTo(String response, InetSocketAddress address) {
         ResponseFrom attach = new ResponseFrom(response, address);
         try {
             channel.register(selector, SelectionKey.OP_WRITE, attach);
@@ -182,7 +165,12 @@ public abstract class Multicaster {
 
     public abstract void handle(ServerResponse serverResponse);
 
-    protected void handle(final DatagramChannel channel, String response, InetSocketAddress address) {
+    /**
+     * Se a resposta é maior do que 1, então foi enviada pelo servidor
+     * @param response
+     * @param address
+     */
+    protected void handle(String response, InetSocketAddress address) {
         if (response.length() > 1) {
             ServerResponse serverResponse = ServerResponse.fromObject(response);
             setServerAddress(serverResponse);
