@@ -1,6 +1,5 @@
 package com.github.lbovolini.crowd.group;
 
-
 import com.github.lbovolini.crowd.utils.CodebaseUtils;
 
 import static com.github.lbovolini.crowd.configuration.Config.*;

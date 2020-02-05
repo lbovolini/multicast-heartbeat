@@ -14,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import static com.github.lbovolini.crowd.configuration.Config.*;
 
-public abstract class Multicaster {
+public abstract class Multicaster extends Thread {
 
     protected Selector selector;
 
@@ -30,26 +30,44 @@ public abstract class Multicaster {
         this.port = port;
     }
 
-    private void init(final DatagramChannel channel, final Selector selector) throws IOException {
-        this.networkInterface = NetworkInterface.getByName(MULTICAST_INTERFACE_NAME);
-        this.group = InetAddress.getByName(MULTICAST_IP);
+    public class ResponseFrom {
+        private final String response;
+        private final InetSocketAddress address;
+
+        ResponseFrom(String  response, InetSocketAddress address) {
+            this.response = response;
+            this.address = address;
+        }
+
+        public String getResponse() {
+            return response;
+        }
+
+        public InetSocketAddress getAddress() {
+            return address;
+        }
+    }
+
+    private void init() throws IOException {
+        networkInterface = NetworkInterface.getByName(MULTICAST_INTERFACE_NAME);
+        group = InetAddress.getByName(MULTICAST_IP);
         channel.setOption(StandardSocketOptions.SO_REUSEADDR, true);
         // !TODO
-        channel.bind(new InetSocketAddress("0.0.0.0", this.port));
-        channel.setOption(StandardSocketOptions.IP_MULTICAST_IF, this.networkInterface);
+        channel.bind(new InetSocketAddress("0.0.0.0", port));
+        channel.setOption(StandardSocketOptions.IP_MULTICAST_IF, networkInterface);
         //channel.setOption(StandardSocketOptions.IP_MULTICAST_LOOP, false);
         channel.configureBlocking(false);
-        channel.join(this.group, this.networkInterface);
+        channel.join(group, networkInterface);
         channel.register(selector, SelectionKey.OP_READ);
     }
 
-    public void start() {
+    public void run() {
         try (final DatagramChannel channel = DatagramChannel.open(StandardProtocolFamily.INET);
              final Selector selector = Selector.open()) {
 
             this.channel = channel;
             this.selector = selector;
-            init(channel, selector);
+            init();
             scheduler();
 
             while (true) {
@@ -62,8 +80,6 @@ public abstract class Multicaster {
         }
     }
 
-    protected abstract void scheduler();
-
     private void read(SelectionKey selectionKey) throws IOException {
 
         DatagramChannel channel = (DatagramChannel) selectionKey.channel();
@@ -75,7 +91,7 @@ public abstract class Multicaster {
         }
 
         buffer.flip();
-        String message = MulticastMessageUtils.getMessage(buffer);
+        String message = getMessage(buffer);
 
         handle(message, (InetSocketAddress)address);
     }
@@ -97,6 +113,25 @@ public abstract class Multicaster {
         channel.register(selectionKey.selector(), SelectionKey.OP_READ);
     }
 
+
+    /**
+     * Envia mensagem somente para o servidor
+     * @param message
+     */
+    public void send(String message) {
+        response(ResponseFactory.get(message), new InetSocketAddress(serverAddress.getAddress(), MULTICAST_PORT));
+        this.selector.wakeup();
+    }
+
+    /**
+     * Envia mensagem para todos participantes do grupo
+     * @param message
+     */
+    public void sendAll(String message) {
+        response(ResponseFactory.get(message), new InetSocketAddress(MULTICAST_IP, MULTICAST_PORT));
+        this.selector.wakeup();
+    }
+
     protected boolean isMyself(InetSocketAddress address) {
         if (address.getAddress().getHostName().equals(HOST_NAME)) {
             return (address.getPort() == MULTICAST_PORT);
@@ -104,15 +139,19 @@ public abstract class Multicaster {
         return false;
     }
 
-    // !todo thread safe?
-    private void wakeUp() {
-        this.selector.wakeup();
-    }
-
+    /**
+     * Adiciona endereço do Agent ao conjunto de endereços
+     * @param address
+     */
     protected void join(InetSocketAddress address) {
         hosts.add(address.toString());
     }
 
+    /**
+     * Verifica se o endereço está presente no conjunto de endereços
+     * @param address
+     * @return
+     */
     protected boolean isMember(InetSocketAddress address) {
         return hosts.contains(address.toString());
     }
@@ -138,32 +177,15 @@ public abstract class Multicaster {
         this.serverAddress = serverResponse.getServerAddress();
     }
 
-    /**
-     * Envia mensagem somente para o servidor
-     * @param message
-     */
-    public void send(String message) {
-        responseFromTo(ResponseFactory.get(message), new InetSocketAddress(serverAddress.getAddress(), MULTICAST_PORT));
-        wakeUp();
-    }
 
-    /**
-     * Envia mensagem para todos participantes do grupo
-     * @param message
-     */
-    public void sendAll(String message) {
-        responseFromTo(ResponseFactory.get(message), new InetSocketAddress(MULTICAST_IP, MULTICAST_PORT));
-        wakeUp();
-    }
-
-    protected void responseFromTo(String response, InetSocketAddress address) {
-        ResponseFrom attach = new ResponseFrom(response, address);
+    protected void response(String message, InetSocketAddress destination) {
+        ResponseFrom attach = new ResponseFrom(ResponseFactory.get(message), destination);
         try {
             channel.register(selector, SelectionKey.OP_WRITE, attach);
         } catch (ClosedChannelException e) { e.printStackTrace(); }
     }
 
-    public abstract void handle(ServerResponse serverResponse);
+    public void handle(ServerResponse serverResponse) {}
 
     /**
      * Se a resposta é maior do que 1, então foi enviada pelo servidor
@@ -177,6 +199,13 @@ public abstract class Multicaster {
         }
     }
 
+    private static String getMessage(ByteBuffer buffer) {
+        byte[] buff = new byte[buffer.limit()];
+        buffer.get(buff, 0, buffer.limit());
+        buffer.clear();
+        return new String(buff, StandardCharsets.UTF_8);
+    }
 
+    protected abstract void scheduler();
 
 }

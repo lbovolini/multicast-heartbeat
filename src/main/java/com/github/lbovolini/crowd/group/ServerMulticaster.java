@@ -1,6 +1,5 @@
 package com.github.lbovolini.crowd.group;
 
-import java.io.IOException;
 import java.net.InetSocketAddress;
 
 import static com.github.lbovolini.crowd.configuration.Config.*;
@@ -15,31 +14,34 @@ public class ServerMulticaster extends Multicaster {
     protected void scheduler() {
     }
 
-    @Override
-    public void handle(ServerResponse serverResponse) {
-    }
-
+    /**
+     * handle mensagem do cliente
+     * @param response
+     * @param address
+     */
     @Override
     protected void handle(String response, InetSocketAddress address) {
+
+        System.out.println(response);
 
         if (response.length() > 1) {
             return;
         }
         if (DISCOVER.equals(response)) {
             join(address);
-            responseFromTo(ResponseFactory.get(CONNECT), address);
+            response(CONNECT, address);
         }
         else if (HEARTBEAT.equals(response)) {
             if (isMember(address)) {
-                responseFromTo(ResponseFactory.get(HEARTBEAT), address);
+                response(HEARTBEAT, address);
             } else {
                 join(address);
-                responseFromTo(ResponseFactory.get(CONNECT), address);
+                response(CONNECT, address);
             }
         }
     }
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) {
         ServerMulticaster serverMulticaster = new ServerMulticaster();
         serverMulticaster.start();
     }

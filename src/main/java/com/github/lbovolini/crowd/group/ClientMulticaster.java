@@ -13,12 +13,17 @@ public class ClientMulticaster extends Multicaster {
         super(MULTICAST_CLIENT_PORT);
     }
 
+    /**
+     * Manipula somente mensagens recebidas do servidor.
+     * Toda mensagem maior que 1 é uma mensagem enviada pelo servidor.
+     * @param message
+     * @param address
+     */
     @Override
-    protected void handle(String response, InetSocketAddress address) {
-        super.handle(response, address);
+    protected void handle(String message, InetSocketAddress address) {
         timeScheduler.updateLastResponseTime();
-        if (response.length() > 1) {
-            ServerResponse serverResponse = ServerResponse.fromObject(response);
+        if (message.length() > 1) {
+            ServerResponse serverResponse = ServerResponse.fromObject(message);
             handle(serverResponse);
         }
     }
@@ -35,6 +40,7 @@ public class ClientMulticaster extends Multicaster {
     public void reload(URL[] codebase, URL libURL) {}
 
     public void handle(ServerResponse response) {
+
         String type = response.getType();
         URL[] codebase = response.getCodebase();
         URL libURL = response.getLibURL();
@@ -57,6 +63,7 @@ public class ClientMulticaster extends Multicaster {
             @Override
             public void connect(URL[] codebase, URL libURL) {
                 super.connect(codebase, libURL);
+                System.out.println("CONNECT");
             }
 
             @Override
