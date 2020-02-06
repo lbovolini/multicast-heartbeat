@@ -24,6 +24,7 @@ public class ClientMulticaster extends Multicaster {
         timeScheduler.updateLastResponseTime();
         if (message.length() > 1) {
             ServerResponse serverResponse = ServerResponse.fromObject(message);
+            setServerAddress(serverResponse);
             handle(serverResponse);
         }
     }
@@ -62,18 +63,17 @@ public class ClientMulticaster extends Multicaster {
         ClientMulticaster clientMulticaster = new ClientMulticaster() {
             @Override
             public void connect(URL[] codebase, URL libURL) {
-                super.connect(codebase, libURL);
                 System.out.println("CONNECT");
             }
 
             @Override
             public void update(URL[] codebase, URL libURL) {
-                super.update(codebase, libURL);
+                System.out.println("UPDATE");
             }
 
             @Override
             public void reload(URL[] codebase, URL libURL) {
-                super.reload(codebase, libURL);
+                System.out.println("RELOAD");
             }
         };
         clientMulticaster.start();

@@ -22,8 +22,6 @@ public class ServerMulticaster extends Multicaster {
     @Override
     protected void handle(String response, InetSocketAddress address) {
 
-        System.out.println(response);
-
         if (response.length() > 1) {
             return;
         }

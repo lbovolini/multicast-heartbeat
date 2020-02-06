@@ -41,7 +41,6 @@ public class TimeScheduler {
             downTime = System.nanoTime() - lastResponseTime;
         }
         downTime = TimeUnit.NANOSECONDS.toSeconds(downTime);
-
         return downTime > MAX_DOWNTIME;
     }
 

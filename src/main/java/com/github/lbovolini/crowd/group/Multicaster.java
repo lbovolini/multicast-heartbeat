@@ -14,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import static com.github.lbovolini.crowd.configuration.Config.*;
 
-public abstract class Multicaster extends Thread {
+public abstract class Multicaster {
 
     protected Selector selector;
 
@@ -61,7 +61,7 @@ public abstract class Multicaster extends Thread {
         channel.register(selector, SelectionKey.OP_READ);
     }
 
-    public void run() {
+    public void start() {
         try (final DatagramChannel channel = DatagramChannel.open(StandardProtocolFamily.INET);
              final Selector selector = Selector.open()) {
 
@@ -119,7 +119,7 @@ public abstract class Multicaster extends Thread {
      * @param message
      */
     public void send(String message) {
-        response(ResponseFactory.get(message), new InetSocketAddress(serverAddress.getAddress(), MULTICAST_PORT));
+        response(message, new InetSocketAddress(serverAddress.getAddress(), MULTICAST_PORT));
         this.selector.wakeup();
     }
 
@@ -128,7 +128,7 @@ public abstract class Multicaster extends Thread {
      * @param message
      */
     public void sendAll(String message) {
-        response(ResponseFactory.get(message), new InetSocketAddress(MULTICAST_IP, MULTICAST_PORT));
+        response(message, new InetSocketAddress(MULTICAST_IP, MULTICAST_PORT));
         this.selector.wakeup();
     }
 
@@ -173,7 +173,7 @@ public abstract class Multicaster extends Thread {
         }
     }
 
-    private void setServerAddress(ServerResponse serverResponse) {
+    protected void setServerAddress(ServerResponse serverResponse) {
         this.serverAddress = serverResponse.getServerAddress();
     }
 
@@ -193,10 +193,7 @@ public abstract class Multicaster extends Thread {
      * @param address
      */
     protected void handle(String response, InetSocketAddress address) {
-        if (response.length() > 1) {
-            ServerResponse serverResponse = ServerResponse.fromObject(response);
-            setServerAddress(serverResponse);
-        }
+
     }
 
     private static String getMessage(ByteBuffer buffer) {
